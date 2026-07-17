@@ -4,10 +4,6 @@ import os
 
 load_dotenv()
 
-DATABASE_URL = (
-    f"mysql+pymysql://{os.getenv('DB_USER')}:"
-    f"{os.getenv('DB_PASSWORD')}@{os.getenv('DB_HOST')}:"
-    f"{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
-)
+DATABASE_URL = ("mysql+pymysql://root:rootpassword@mariadb:3306/curriculum_db")
 
 engine = create_engine(DATABASE_URL)
