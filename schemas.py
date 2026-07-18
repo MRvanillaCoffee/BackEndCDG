@@ -47,3 +47,25 @@ class ProgramOut(ProgramBase):
     created_at: datetime
     updated_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+class UserCreate(BaseModel):
+    email: str
+    password: str
+    full_name: str | None = None
+    role: str = "coordinator"   # admin ตั้งตอนสร้างเท่านั้น
+
+class UserOut(BaseModel):
+    id: int
+    email: str
+    full_name: str | None
+    role: str
+    is_active: bool
+    model_config = ConfigDict(from_attributes=True)
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+class ReviewIn(BaseModel):
+    decision: str    # "approved" | "rejected" | "comment"
+    comment: str | None = None

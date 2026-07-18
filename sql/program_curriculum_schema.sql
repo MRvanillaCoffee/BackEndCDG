@@ -191,6 +191,40 @@ CREATE TABLE quality_assurance (
     communication       TEXT                    -- ยังไม่มี UI ในหน้าปัจจุบัน (เตรียมไว้)
 );
 
+-- เพิ่มต่อจาก schema เดิม (program_curriculum_schema_mysql.sql)
+
+CREATE TABLE users (
+    id                  INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    email               VARCHAR(255) NOT NULL UNIQUE,
+    hashed_password     VARCHAR(255) NOT NULL,
+    full_name           VARCHAR(255),
+    role                ENUM('admin', 'coordinator', 'reviewer') NOT NULL DEFAULT 'coordinator',
+    is_active           TINYINT(1) NOT NULL DEFAULT 1,
+    created_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- program ต้องรู้ว่าใครเป็นเจ้าของ (coordinator คนไหนสร้าง)
+ALTER TABLE program
+    ADD COLUMN created_by INT UNSIGNED NULL AFTER id,
+    ADD CONSTRAINT fk_program_created_by
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;
+
+-- ขยาย status ให้รองรับ flow ตรวจสอบ-อนุมัติ
+ALTER TABLE program
+    MODIFY COLUMN status ENUM('draft', 'submitted', 'under_review', 'approved', 'rejected')
+        NOT NULL DEFAULT 'draft';
+
+-- เก็บ comment ของ reviewer ตอนตรวจ
+CREATE TABLE program_review (
+    id                  INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    program_id          INT UNSIGNED NOT NULL,
+    reviewer_id         INT UNSIGNED NOT NULL,
+    decision            ENUM('approved', 'rejected', 'comment') NOT NULL,
+    comment             TEXT,
+    created_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_review_program FOREIGN KEY (program_id) REFERENCES program(id) ON DELETE CASCADE,
+    CONSTRAINT fk_review_reviewer FOREIGN KEY (reviewer_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 -- ============================================================
 -- Trigger: auto-update program.updated_at on row change
 -- ============================================================
