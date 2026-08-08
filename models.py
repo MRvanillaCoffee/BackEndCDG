@@ -3,6 +3,8 @@ from sqlalchemy import (
     String, Integer, Text, DECIMAL, TIMESTAMP, Enum, ForeignKey, func
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship, DeclarativeBase
+from datetime import date, datetime
+from decimal import Decimal
 
 
 class Base(DeclarativeBase):
@@ -10,99 +12,294 @@ class Base(DeclarativeBase):
 
 
 # ============================================================
-# USERS
-# ============================================================
-class User(Base):
-    __tablename__ = "users"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
-    full_name: Mapped[str | None] = mapped_column(String(255))
-    role: Mapped[str] = mapped_column(
-        Enum("admin", "coordinator", "reviewer", name="user_role"),
-        nullable=False,
-        default="coordinator",
-    )
-    is_active: Mapped[bool] = mapped_column(default=True)
-    created_at: Mapped[str] = mapped_column(TIMESTAMP, server_default=func.now())
-
-    programs: Mapped[list["Program"]] = relationship(back_populates="creator")
-    reviews: Mapped[list["ProgramReview"]] = relationship(back_populates="reviewer")
-
-
-# ============================================================
-# PROGRAM (ตารางหลัก)
+# PROGRAM
 # ============================================================
 class Program(Base):
     __tablename__ = "program"
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    created_by: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL")
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+        autoincrement=True
     )
 
-    program_code: Mapped[str | None] = mapped_column(String(50))
-    name_th: Mapped[str | None] = mapped_column(String(255))
-    name_en: Mapped[str | None] = mapped_column(String(255))
-    degree_name_th: Mapped[str | None] = mapped_column(String(255))
-    degree_abbr_th: Mapped[str | None] = mapped_column(String(50))
-    degree_name_en: Mapped[str | None] = mapped_column(String(255))
-    degree_abbr_en: Mapped[str | None] = mapped_column(String(50))
-    major: Mapped[str | None] = mapped_column(String(255))
-    program_format: Mapped[str | None] = mapped_column(String(100))
-    duration_years: Mapped[float | None] = mapped_column(DECIMAL(3, 1))
-    program_category: Mapped[str | None] = mapped_column(String(255))
-    language: Mapped[str | None] = mapped_column(String(255))
-    admission_req: Mapped[str | None] = mapped_column(Text)
-    degree_granting: Mapped[str | None] = mapped_column(String(255))
-    program_type: Mapped[str | None] = mapped_column(String(100))
-    open_year: Mapped[str | None] = mapped_column(String(100))
-    approval_details: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True
+    )
+
+    # ==========================================
+    # Basic information - Section 1.1
+    # ==========================================
+
+    program_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    name_th: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    name_en: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # ==========================================
+    # Degree information - Section 1.2
+    # ==========================================
+
+    degree_name_th: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    degree_abbr_th: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    degree_name_en: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    degree_abbr_en: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
+    # ==========================================
+    # Section 1.3 (major stored on program itself, in addition
+    # to the per-major rows in ProgramMajor)
+    # ==========================================
+
+    major: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # ==========================================
+    # Section 1.4
+    # ==========================================
+
+    total_credits: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # ==========================================
+    # Program format - Section 1.5
+    # ==========================================
+
+    program_format: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    duration_years: Mapped[Decimal | None] = mapped_column(DECIMAL(3, 1), nullable=True)
+    program_category: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    program_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    language: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    admission_req: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cooperation: Mapped[str | None] = mapped_column(Text, nullable=True)
+    degree_granting: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    open_year: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    # ==========================================
+    # Approval / workflow
+    # ==========================================
+
+    approval_details: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     status: Mapped[str] = mapped_column(
-        Enum("draft", "submitted", "under_review", "approved", "rejected", name="program_status"),
+        Enum("draft", "submitted", "under_review", "approved", "rejected"),
         nullable=False,
         default="draft",
+        server_default="draft"
     )
 
-    philosophy: Mapped[str | None] = mapped_column(Text)
-    importance: Mapped[str | None] = mapped_column(Text)
-    objectives: Mapped[str | None] = mapped_column(Text)
-    uniqueness: Mapped[str | None] = mapped_column(Text)
-    careers: Mapped[str | None] = mapped_column(Text)
+    # ==========================================
+    # Narrative sections (used by later pages of the wizard)
+    # ==========================================
 
-    total_credits: Mapped[int | None] = mapped_column(Integer)
+    philosophy: Mapped[str | None] = mapped_column(Text, nullable=True)
+    importance: Mapped[str | None] = mapped_column(Text, nullable=True)
+    objectives: Mapped[str | None] = mapped_column(Text, nullable=True)
+    uniqueness: Mapped[str | None] = mapped_column(Text, nullable=True)
+    careers: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    created_at: Mapped[str] = mapped_column(TIMESTAMP, server_default=func.now())
-    updated_at: Mapped[str] = mapped_column(
-        TIMESTAMP, server_default=func.now(), onupdate=func.now()
+    # ==========================================
+    # Timestamps
+    # ==========================================
+
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP, server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    creator: Mapped["User"] = relationship(back_populates="programs")
-    reviews: Mapped[list["ProgramReview"]] = relationship(
-        back_populates="program", cascade="all, delete-orphan"
+    # ==========================================
+    # Institution
+    # ==========================================
+
+    university_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    campus: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # ==========================================
+    # Section 1.7
+    # ==========================================
+
+    readiness: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # ==========================================
+    # Section 1.10
+    # ==========================================
+
+    location: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # ==========================================
+    # Section 1.11
+    # ==========================================
+
+    economic_situation: Mapped[str | None] = mapped_column(Text, nullable=True)
+    social_situation: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # ==========================================
+    # Section 1.12
+    # ==========================================
+
+    development_plan: Mapped[str | None] = mapped_column(Text, nullable=True)
+    university_mission: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # ==========================================
+    # Section 1.13
+    # ==========================================
+
+    other_courses_in: Mapped[str | None] = mapped_column(Text, nullable=True)
+    other_courses_out: Mapped[str | None] = mapped_column(Text, nullable=True)
+    administration: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # ==========================================
+    # Relationships
+    # ==========================================
+
+    majors: Mapped[list["ProgramMajor"]] = relationship(
+        back_populates="program",
+        cascade="all, delete-orphan"
     )
+
+    careers_list: Mapped[list["ProgramCareer"]] = relationship(
+        back_populates="program",
+        cascade="all, delete-orphan"
+    )
+
+    approvals: Mapped[list["ProgramApproval"]] = relationship(
+        back_populates="program",
+        cascade="all, delete-orphan"
+    )
+
+    instructors: Mapped[list["ProgramInstructor"]] = relationship(
+        back_populates="program",
+        cascade="all, delete-orphan"
+    )
+
+    development_plans: Mapped[list["ProgramDevelopmentPlan"]] = relationship(
+        back_populates="program",
+        cascade="all, delete-orphan"
+    )
+
+    elo_framework: Mapped["ProgramEloFramework | None"] = relationship(
+        back_populates="program",
+        cascade="all, delete-orphan",
+        uselist=False
+    )
+
+    # Keep your existing relationships
+    # such as creator / reviews here.
 
 
 # ============================================================
-# PROGRAM_REVIEW (ประวัติการตรวจสอบ/อนุมัติ)
+# PROGRAM MAJOR
 # ============================================================
-class ProgramReview(Base):
-    __tablename__ = "program_review"
+class ProgramMajor(Base):
+    __tablename__ = "program_major"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     program_id: Mapped[int] = mapped_column(
         ForeignKey("program.id", ondelete="CASCADE"), nullable=False
     )
-    reviewer_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
-    decision: Mapped[str] = mapped_column(
-        Enum("approved", "rejected", "comment", name="review_decision"), nullable=False
-    )
-    comment: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[str] = mapped_column(TIMESTAMP, server_default=func.now())
+    major_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    sort_order: Mapped[int] = mapped_column(default=0)
 
-    program: Mapped["Program"] = relationship(back_populates="reviews")
-    reviewer: Mapped["User"] = relationship(back_populates="reviews")
+    program: Mapped["Program"] = relationship(back_populates="majors")
+
+
+# ============================================================
+# PROGRAM CAREER
+# ============================================================
+class ProgramCareer(Base):
+    __tablename__ = "program_career"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    program_id: Mapped[int] = mapped_column(
+        ForeignKey("program.id", ondelete="CASCADE"), nullable=False
+    )
+    career_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    sort_order: Mapped[int] = mapped_column(default=0)
+
+    program: Mapped["Program"] = relationship(back_populates="careers_list")
+
+
+# ============================================================
+# PROGRAM APPROVAL
+# (columns match the SQL dump: `committee`, `approval_date`)
+# ============================================================
+class ProgramApproval(Base):
+    __tablename__ = "program_approval"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    program_id: Mapped[int] = mapped_column(
+        ForeignKey("program.id", ondelete="CASCADE"), nullable=False
+    )
+
+    committee: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    approval_date: Mapped[date | None] = mapped_column(nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(default=0)
+
+    program: Mapped["Program"] = relationship(back_populates="approvals")
+
+
+# ============================================================
+# PROGRAM INSTRUCTOR
+# ============================================================
+class ProgramInstructor(Base):
+    __tablename__ = "program_instructor"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    program_id: Mapped[int] = mapped_column(
+        ForeignKey("program.id", ondelete="CASCADE"), nullable=False
+    )
+
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    position: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    degree: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    branch: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    research: Mapped[str | None] = mapped_column(Text, nullable=True)
+    load_now: Mapped[Decimal | None] = mapped_column(DECIMAL(8, 2), nullable=True)
+    load_new: Mapped[Decimal | None] = mapped_column(DECIMAL(8, 2), nullable=True)
+    instructor_type: Mapped[str] = mapped_column(
+        Enum("responsible", "teaching", "both"),
+        nullable=False,
+        default="responsible",
+        server_default="responsible"
+    )
+    sort_order: Mapped[int] = mapped_column(default=0)
+
+    program: Mapped["Program"] = relationship(back_populates="instructors")
+
+
+# ============================================================
+# PROGRAM DEVELOPMENT PLAN  (matches SQL: program_development_plan)
+# ============================================================
+class ProgramDevelopmentPlan(Base):
+    __tablename__ = "program_development_plan"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    program_id: Mapped[int] = mapped_column(
+        ForeignKey("program.id", ondelete="CASCADE"), nullable=False
+    )
+
+    plan: Mapped[str | None] = mapped_column(Text, nullable=True)
+    strategy: Mapped[str | None] = mapped_column(Text, nullable=True)
+    indicator: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(default=0)
+
+    program: Mapped["Program"] = relationship(back_populates="development_plans")
+
+
+# ============================================================
+# PROGRAM ELO FRAMEWORK  (matches SQL: program_elo_framework)
+# One row per program — holds the four YLO-by-branch lists as one
+# JSON blob in `framework`.
+# ============================================================
+class ProgramEloFramework(Base):
+    __tablename__ = "program_elo_framework"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    program_id: Mapped[int] = mapped_column(
+        ForeignKey("program.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
+
+    framework: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    program: Mapped["Program"] = relationship(back_populates="elo_framework")
+
+

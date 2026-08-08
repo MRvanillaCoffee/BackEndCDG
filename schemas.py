@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, date
 
 # ฟิลด์ทั้งหมด optional เพราะ user กรอกทีละหน้า/ทีละส่วนได้ (wizard, save draft)
 class ProgramBase(BaseModel):
@@ -31,10 +31,37 @@ class ProgramBase(BaseModel):
 
     total_credits: int | None = None
 
+    # section 1.5 (cont.) — already on the model, missing here before
+    cooperation: str | None = None
+
+    # section 1.7
+    readiness: str | None = None
+
+    # section 1.10
+    location: str | None = None
+
+    # section 1.11
+    economic_situation: str | None = None
+    social_situation: str | None = None
+
+    # section 1.12
+    development_plan: str | None = None
+    university_mission: str | None = None
+
+    # section 1.13
+    other_courses_in: str | None = None
+    other_courses_out: str | None = None
+    administration: str | None = None
+
+    # institution / bookkeeping — already on the model, missing here before
+    university_name: str | None = None
+    campus: str | None = None
+
 
 class ProgramCreate(ProgramBase):
     """ใช้ตอน POST (หน้า 1) — บังคับ name_th อย่างน้อย"""
     name_th: str
+    created_by: int | None = None
 
 
 class ProgramUpdate(ProgramBase):
@@ -42,10 +69,94 @@ class ProgramUpdate(ProgramBase):
     pass
 
 
+class ProgramMajorCreate(BaseModel):
+    major_name: str
+    sort_order: int = 0
+
+
+class ProgramMajorOut(ProgramMajorCreate):
+    id: int
+    program_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProgramCareerCreate(BaseModel):
+    career_name: str
+    sort_order: int = 0
+
+
+class ProgramCareerOut(ProgramCareerCreate):
+    id: int
+    program_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProgramApprovalCreate(BaseModel):
+    committee: str | None = None
+    approval_date: date | None = None
+    note: str | None = None
+    sort_order: int = 0
+
+
+class ProgramApprovalOut(ProgramApprovalCreate):
+    id: int
+    program_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProgramInstructorCreate(BaseModel):
+    name: str
+    position: str | None = None
+    degree: str | None = None
+    branch: str | None = None
+    research: str | None = None
+    load_now: Decimal | None = None
+    load_new: Decimal | None = None
+    instructor_type: str = "responsible"
+    sort_order: int = 0
+
+
+class ProgramInstructorOut(ProgramInstructorCreate):
+    id: int
+    program_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProgramDevelopmentPlanCreate(BaseModel):
+    plan: str | None = None
+    strategy: str | None = None
+    indicator: str | None = None
+    sort_order: int = 0
+
+
+class ProgramDevelopmentPlanOut(ProgramDevelopmentPlanCreate):
+    id: int
+    program_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProgramEloFrameworkIn(BaseModel):
+    framework: str | None = None
+
+
+class ProgramEloFrameworkOut(ProgramEloFrameworkIn):
+    id: int
+    program_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ProgramOut(ProgramBase):
     id: int
+    created_by: int | None = None
     created_at: datetime
     updated_at: datetime
+
+    majors: list[ProgramMajorOut] = []
+    careers_list: list[ProgramCareerOut] = []
+    approvals: list[ProgramApprovalOut] = []
+    instructors: list[ProgramInstructorOut] = []
+    development_plans: list[ProgramDevelopmentPlanOut] = []
+
     model_config = ConfigDict(from_attributes=True)
 
 class UserCreate(BaseModel):
