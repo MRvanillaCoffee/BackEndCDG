@@ -181,6 +181,36 @@ class Program(Base):
         uselist=False
     )
 
+    ylos: Mapped[list["Ylo"]] = relationship(
+        back_populates="program",
+        cascade="all, delete-orphan"
+    )
+
+    learning_topics: Mapped[list["ProgramLearningTopic"]] = relationship(
+        back_populates="program",
+        cascade="all, delete-orphan"
+    )
+
+    schedules: Mapped[list["ProgramSchedule"]] = relationship(
+        back_populates="program",
+        cascade="all, delete-orphan"
+    )
+
+    budget_incomes: Mapped[list["ProgramBudgetIncome"]] = relationship(
+        back_populates="program",
+        cascade="all, delete-orphan"
+    )
+
+    budget_expenses: Mapped[list["ProgramBudgetExpense"]] = relationship(
+        back_populates="program",
+        cascade="all, delete-orphan"
+    )
+
+    course_categories: Mapped[list["CourseCategory"]] = relationship(
+        back_populates="program",
+        cascade="all, delete-orphan"
+    )
+
     # Keep your existing relationships
     # such as creator / reviews here.
 
@@ -301,5 +331,124 @@ class ProgramEloFramework(Base):
     framework: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     program: Mapped["Program"] = relationship(back_populates="elo_framework")
+
+
+# ============================================================
+# YLO  (matches SQL: ylo)
+# Itemized year-level learning outcomes, one row per year per branch.
+# ============================================================
+class Ylo(Base):
+    __tablename__ = "ylo"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    program_id: Mapped[int] = mapped_column(
+        ForeignKey("program.id", ondelete="CASCADE"), nullable=False
+    )
+
+    year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    branch: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+
+    program: Mapped["Program"] = relationship(back_populates="ylos")
+
+
+# ============================================================
+# PROGRAM LEARNING TOPIC  (generic catch-all — matches SQL: program_learning_topic)
+# Used for any page-3 section that has no dedicated table: free-text
+# sections store plain text in `content`; list sections store a JSON
+# array string in `content`.
+# ============================================================
+class ProgramLearningTopic(Base):
+    __tablename__ = "program_learning_topic"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    program_id: Mapped[int] = mapped_column(
+        ForeignKey("program.id", ondelete="CASCADE"), nullable=False
+    )
+
+    topic_no: Mapped[str] = mapped_column(String(20), nullable=False)
+    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(default=0)
+
+    program: Mapped["Program"] = relationship(back_populates="learning_topics")
+
+
+# ============================================================
+# PROGRAM SCHEDULE  (matches SQL: program_schedule) — 3.4
+# ============================================================
+class ProgramSchedule(Base):
+    __tablename__ = "program_schedule"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    program_id: Mapped[int] = mapped_column(
+        ForeignKey("program.id", ondelete="CASCADE"), nullable=False
+    )
+
+    semester_type: Mapped[str] = mapped_column(
+        Enum("semester1", "semester2", "summer"), nullable=False
+    )
+    schedule_text: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    program: Mapped["Program"] = relationship(back_populates="schedules")
+
+
+# ============================================================
+# PROGRAM BUDGET INCOME / EXPENSE  — 3.9 / 3.10
+# (matches SQL: program_budget_income / program_budget_expense)
+# One row per (item, year) cell — the frontend's year-columns table
+# gets flattened into rows here.
+# ============================================================
+class ProgramBudgetIncome(Base):
+    __tablename__ = "program_budget_income"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    program_id: Mapped[int] = mapped_column(
+        ForeignKey("program.id", ondelete="CASCADE"), nullable=False
+    )
+
+    detail: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    year_label: Mapped[str] = mapped_column(String(20), nullable=False)
+    amount: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 2), nullable=True)
+    sort_order: Mapped[int] = mapped_column(default=0)
+
+    program: Mapped["Program"] = relationship(back_populates="budget_incomes")
+
+
+class ProgramBudgetExpense(Base):
+    __tablename__ = "program_budget_expense"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    program_id: Mapped[int] = mapped_column(
+        ForeignKey("program.id", ondelete="CASCADE"), nullable=False
+    )
+
+    category: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    year_label: Mapped[str] = mapped_column(String(20), nullable=False)
+    amount: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 2), nullable=True)
+    sort_order: Mapped[int] = mapped_column(default=0)
+
+    program: Mapped["Program"] = relationship(back_populates="budget_expenses")
+
+
+# ============================================================
+# COURSE CATEGORY  (matches SQL: course_category) — 3.13
+# ============================================================
+class CourseCategory(Base):
+    __tablename__ = "course_category"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    program_id: Mapped[int] = mapped_column(
+        ForeignKey("program.id", ondelete="CASCADE"), nullable=False
+    )
+
+    name_th: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    required_credits: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sort_order: Mapped[int] = mapped_column(default=0)
+    branch: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+
+    program: Mapped["Program"] = relationship(back_populates="course_categories")
+
+
 
 

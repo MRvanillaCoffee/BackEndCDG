@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import Program, ProgramInstructor
-from schemas import ProgramInstructorCreate, ProgramInstructorOut
+from schemas import ProgramInstructorCreate, ProgramInstructorOut, ProgramInstructorUpdate
 
 
 router = APIRouter(
@@ -50,6 +50,33 @@ def add_instructor(
     db.commit()
     db.refresh(instructor)
 
+    return instructor
+
+
+@router.put("/{instructor_id}", response_model=ProgramInstructorOut)
+def update_instructor(
+    program_id: int,
+    instructor_id: int,
+    data: ProgramInstructorUpdate,
+    db: Session = Depends(get_db)
+):
+    instructor = (
+        db.query(ProgramInstructor)
+        .filter(
+            ProgramInstructor.id == instructor_id,
+            ProgramInstructor.program_id == program_id
+        )
+        .first()
+    )
+
+    if not instructor:
+        raise HTTPException(status_code=404, detail="Instructor not found")
+
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(instructor, field, value)
+
+    db.commit()
+    db.refresh(instructor)
     return instructor
 
 

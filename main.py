@@ -8,7 +8,12 @@ from routes import (
     program_approvals,
     program_instructors,
     program_development_plans,
-    program_elo_framework
+    program_elo_framework,
+    program_ylo,
+    program_learning_topics,
+    program_schedule,
+    program_budget,
+    program_course_category
 )
 
 
@@ -29,6 +34,12 @@ app.include_router(program_approvals.router)
 app.include_router(program_instructors.router)
 app.include_router(program_development_plans.router)
 app.include_router(program_elo_framework.router)
+app.include_router(program_ylo.router)
+app.include_router(program_learning_topics.router)
+app.include_router(program_schedule.router)
+app.include_router(program_budget.income_router)
+app.include_router(program_budget.expense_router)
+app.include_router(program_course_category.router)
 
 @app.get("/health")
 def health_check():

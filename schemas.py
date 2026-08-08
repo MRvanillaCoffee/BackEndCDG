@@ -122,6 +122,18 @@ class ProgramInstructorOut(ProgramInstructorCreate):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ProgramInstructorUpdate(BaseModel):
+    name: str | None = None
+    position: str | None = None
+    degree: str | None = None
+    branch: str | None = None
+    research: str | None = None
+    load_now: Decimal | None = None
+    load_new: Decimal | None = None
+    instructor_type: str | None = None
+    sort_order: int | None = None
+
+
 class ProgramDevelopmentPlanCreate(BaseModel):
     plan: str | None = None
     strategy: str | None = None
@@ -145,6 +157,81 @@ class ProgramEloFrameworkOut(ProgramEloFrameworkIn):
     model_config = ConfigDict(from_attributes=True)
 
 
+class YloCreate(BaseModel):
+    year: int | None = None
+    description: str | None = None
+    branch: str = ""
+
+
+class YloOut(YloCreate):
+    id: int
+    program_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProgramLearningTopicCreate(BaseModel):
+    topic_no: str
+    title: str | None = None
+    content: str | None = None
+    sort_order: int = 0
+
+
+class ProgramLearningTopicOut(ProgramLearningTopicCreate):
+    id: int
+    program_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProgramScheduleCreate(BaseModel):
+    semester_type: str
+    schedule_text: str | None = None
+
+
+class ProgramScheduleOut(ProgramScheduleCreate):
+    id: int
+    program_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProgramBudgetIncomeCreate(BaseModel):
+    detail: str | None = None
+    year_label: str
+    amount: Decimal | None = None
+    sort_order: int = 0
+
+
+class ProgramBudgetIncomeOut(ProgramBudgetIncomeCreate):
+    id: int
+    program_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProgramBudgetExpenseCreate(BaseModel):
+    category: str | None = None
+    year_label: str
+    amount: Decimal | None = None
+    sort_order: int = 0
+
+
+class ProgramBudgetExpenseOut(ProgramBudgetExpenseCreate):
+    id: int
+    program_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CourseCategoryCreate(BaseModel):
+    name_th: str | None = None
+    required_credits: int | None = None
+    sort_order: int = 0
+    branch: str = ""
+
+
+class CourseCategoryOut(CourseCategoryCreate):
+    id: int
+    program_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ProgramOut(ProgramBase):
     id: int
     created_by: int | None = None
@@ -156,6 +243,12 @@ class ProgramOut(ProgramBase):
     approvals: list[ProgramApprovalOut] = []
     instructors: list[ProgramInstructorOut] = []
     development_plans: list[ProgramDevelopmentPlanOut] = []
+    ylos: list[YloOut] = []
+    learning_topics: list[ProgramLearningTopicOut] = []
+    schedules: list[ProgramScheduleOut] = []
+    budget_incomes: list[ProgramBudgetIncomeOut] = []
+    budget_expenses: list[ProgramBudgetExpenseOut] = []
+    course_categories: list[CourseCategoryOut] = []
 
     model_config = ConfigDict(from_attributes=True)
 
