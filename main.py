@@ -22,7 +22,13 @@ from routes import (
     program_graduation_criteria,
     program_faculty_development,
     program_quality_section,
-    quality_kpi
+    quality_kpi,
+    program_evaluation_process,
+    course,
+    program_semester,
+    program_course,
+    course_instructor,
+    plo_course_mapping
 )
 
 
@@ -58,6 +64,12 @@ app.include_router(program_graduation_criteria.router)
 app.include_router(program_faculty_development.router)
 app.include_router(program_quality_section.router)
 app.include_router(quality_kpi.router)
+app.include_router(program_evaluation_process.router)
+app.include_router(course.router)
+app.include_router(program_semester.router)
+app.include_router(program_course.router)
+app.include_router(course_instructor.router)
+app.include_router(plo_course_mapping.router)
 
 @app.get("/health")
 def health_check():
