@@ -1,6 +1,10 @@
 from fastapi import FastAPI
-from routes import programs
 from fastapi.middleware.cors import CORSMiddleware
+
+# 🌟 1. นำเข้า Database Engine และ Models ของเรา
+from database import engine
+import models
+
 from routes import (
     programs,
     program_majors,
@@ -31,7 +35,8 @@ from routes import (
     plo_course_mapping
 )
 
-
+# 🌟 2. สั่งให้ SQLAlchemy สร้างตารางทั้งหมดอัตโนมัติ
+models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Curriculum API")
 
@@ -42,6 +47,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 app.include_router(programs.router)
 app.include_router(program_majors.router)
 app.include_router(program_careers.router)
