@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, selectinload
 
 from database import get_db
-from models import Program, ProgramFavorite, User
+from models import Program
 from schemas import ProgramCreate, ProgramUpdate, ProgramOut
 
 
