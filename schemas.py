@@ -1,66 +1,107 @@
-from pydantic import BaseModel, ConfigDict
+from typing import Annotated, Literal
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints
 from decimal import Decimal
 from datetime import datetime, date
 
+# VARCHAR(n) columns: reject over-long input with a 422 instead of letting
+# MariaDB refuse it and surface as a 500. Lengths come from the live database.
+Str20 = Annotated[str, StringConstraints(max_length=20)]
+Str50 = Annotated[str, StringConstraints(max_length=50)]
+Str100 = Annotated[str, StringConstraints(max_length=100)]
+Str255 = Annotated[str, StringConstraints(max_length=255)]
+
+# ENUM columns: only the values the database allows (anything else would be a 500).
+CreditType = Literal['credit', 'hour']
+CurriculumType = Literal['new', 'revision']
+InstructorType = Literal['responsible', 'teaching', 'both']
+ProgramStatus = Literal['draft', 'submitted', 'under_review', 'approved', 'rejected']
+ReviewDecision = Literal['approved', 'rejected', 'comment']
+SemesterType = Literal['semester1', 'semester2', 'summer']
+
+# TEXT holds at most 65,535 BYTES, and a Thai character takes 3 bytes (so roughly
+# 21,800 Thai characters). MEDIUMTEXT holds 16 MB; the API caps it at 10,000,000
+# bytes, safely under MariaDB's default 16 MB packet size.
+def _max_bytes(limit: int):
+    def check(value: str) -> str:
+        if len(value.encode("utf-8")) > limit:
+            raise ValueError(
+                f"text is too long: at most {limit:,} bytes in UTF-8 (a Thai character takes 3 bytes)"
+            )
+        return value
+    return check
+
+Text64K = Annotated[str, AfterValidator(_max_bytes(65_535))]
+TextMedium = Annotated[str, AfterValidator(_max_bytes(10_000_000))]
+
+# INT columns: stay inside the database's range (ids / foreign keys are checked by the routers).
+Int32 = Annotated[int, Field(ge=-2_147_483_648, le=2_147_483_647)]
+
+# DECIMAL(p,s): reject anything that would ROUND UP past the largest storable value
+# (e.g. 99.95 rounds to 100.0 and does not fit DECIMAL(3,1); 99.94 does).
+Decimal15_2 = Annotated[Decimal, Field(gt=Decimal('-9999999999999.995'), lt=Decimal('9999999999999.995'))]
+Decimal3_1 = Annotated[Decimal, Field(gt=Decimal('-99.95'), lt=Decimal('99.95'))]
+Decimal8_2 = Annotated[Decimal, Field(gt=Decimal('-999999.995'), lt=Decimal('999999.995'))]
+
 # ฟิลด์ทั้งหมด optional เพราะ user กรอกทีละหน้า/ทีละส่วนได้ (wizard, save draft)
 class ProgramBase(BaseModel):
-    program_code: str | None = None
-    name_th: str | None = None
-    name_en: str | None = None
-    degree_name_th: str | None = None
-    degree_abbr_th: str | None = None
-    degree_name_en: str | None = None
-    degree_abbr_en: str | None = None
-    major: str | None = None
-    program_format: str | None = None
-    duration_years: Decimal | None = None
-    program_category: str | None = None
-    language: str | None = None
-    admission_req: str | None = None
-    degree_granting: str | None = None
-    program_type: str | None = None
-    open_year: str | None = None
-    approval_details: str | None = None
-    status: str = "draft"
+    program_code: Str50 | None = None
+    name_th: Str255 | None = None
+    name_en: Str255 | None = None
+    degree_name_th: Str255 | None = None
+    degree_abbr_th: Str50 | None = None
+    degree_name_en: Str255 | None = None
+    degree_abbr_en: Str50 | None = None
+    major: Str255 | None = None
+    program_format: Str100 | None = None
+    duration_years: Decimal3_1 | None = None
+    program_category: Str255 | None = None
+    language: Str255 | None = None
+    admission_req: Text64K | None = None
+    degree_granting: Str255 | None = None
+    program_type: Str100 | None = None
+    open_year: Str100 | None = None
+    approval_details: Text64K | None = None
+    status: ProgramStatus = "draft"
+    curriculum_type: CurriculumType = "new"
 
-    philosophy: str | None = None
-    importance: str | None = None
-    objectives: str | None = None
-    uniqueness: str | None = None
-    careers: str | None = None
+    philosophy: Text64K | None = None
+    importance: Text64K | None = None
+    objectives: Text64K | None = None
+    uniqueness: Text64K | None = None
+    careers: Text64K | None = None
 
-    total_credits: int | None = None
+    total_credits: Int32 | None = None
 
     # section 1.5 (cont.) — already on the model, missing here before
-    cooperation: str | None = None
+    cooperation: Text64K | None = None
 
     # section 1.7
-    readiness: str | None = None
+    readiness: Text64K | None = None
 
     # section 1.10
-    location: str | None = None
+    location: Str255 | None = None
 
     # section 1.11
-    economic_situation: str | None = None
-    social_situation: str | None = None
+    economic_situation: Text64K | None = None
+    social_situation: Text64K | None = None
 
     # section 1.12
-    development_plan: str | None = None
-    university_mission: str | None = None
+    development_plan: Text64K | None = None
+    university_mission: Text64K | None = None
 
     # section 1.13
-    other_courses_in: str | None = None
-    other_courses_out: str | None = None
-    administration: str | None = None
+    other_courses_in: Text64K | None = None
+    other_courses_out: Text64K | None = None
+    administration: Text64K | None = None
 
     # institution / bookkeeping — already on the model, missing here before
-    university_name: str | None = None
-    campus: str | None = None
+    university_name: Str255 | None = None
+    campus: Str255 | None = None
 
 
 class ProgramCreate(ProgramBase):
     """ใช้ตอน POST (หน้า 1) — บังคับ name_th อย่างน้อย"""
-    name_th: str
+    name_th: Str255
     created_by: int | None = None
 
 
@@ -70,8 +111,8 @@ class ProgramUpdate(ProgramBase):
 
 
 class ProgramMajorCreate(BaseModel):
-    major_name: str
-    sort_order: int = 0
+    major_name: Str255
+    sort_order: Int32 = 0
 
 
 class ProgramMajorOut(ProgramMajorCreate):
@@ -81,8 +122,8 @@ class ProgramMajorOut(ProgramMajorCreate):
 
 
 class ProgramCareerCreate(BaseModel):
-    career_name: str
-    sort_order: int = 0
+    career_name: Str255
+    sort_order: Int32 = 0
 
 
 class ProgramCareerOut(ProgramCareerCreate):
@@ -92,10 +133,10 @@ class ProgramCareerOut(ProgramCareerCreate):
 
 
 class ProgramApprovalCreate(BaseModel):
-    committee: str | None = None
+    committee: Str255 | None = None
     approval_date: date | None = None
-    note: str | None = None
-    sort_order: int = 0
+    note: Text64K | None = None
+    sort_order: Int32 = 0
 
 
 class ProgramApprovalOut(ProgramApprovalCreate):
@@ -105,15 +146,15 @@ class ProgramApprovalOut(ProgramApprovalCreate):
 
 
 class ProgramInstructorCreate(BaseModel):
-    name: str
-    position: str | None = None
-    degree: str | None = None
-    branch: str | None = None
-    research: str | None = None
-    load_now: Decimal | None = None
-    load_new: Decimal | None = None
-    instructor_type: str = "responsible"
-    sort_order: int = 0
+    name: Str255
+    position: Str255 | None = None
+    degree: Str255 | None = None
+    branch: Str100 | None = None
+    research: Text64K | None = None
+    load_now: Decimal8_2 | None = None
+    load_new: Decimal8_2 | None = None
+    instructor_type: InstructorType = "responsible"
+    sort_order: Int32 = 0
 
 
 class ProgramInstructorOut(ProgramInstructorCreate):
@@ -123,22 +164,22 @@ class ProgramInstructorOut(ProgramInstructorCreate):
 
 
 class ProgramInstructorUpdate(BaseModel):
-    name: str | None = None
-    position: str | None = None
-    degree: str | None = None
-    branch: str | None = None
-    research: str | None = None
-    load_now: Decimal | None = None
-    load_new: Decimal | None = None
-    instructor_type: str | None = None
-    sort_order: int | None = None
+    name: Str255 | None = None
+    position: Str255 | None = None
+    degree: Str255 | None = None
+    branch: Str100 | None = None
+    research: Text64K | None = None
+    load_now: Decimal8_2 | None = None
+    load_new: Decimal8_2 | None = None
+    instructor_type: InstructorType | None = None
+    sort_order: Int32 | None = None
 
 
 class ProgramDevelopmentPlanCreate(BaseModel):
-    plan: str | None = None
-    strategy: str | None = None
-    indicator: str | None = None
-    sort_order: int = 0
+    plan: Text64K | None = None
+    strategy: Text64K | None = None
+    indicator: Text64K | None = None
+    sort_order: Int32 = 0
 
 
 class ProgramDevelopmentPlanOut(ProgramDevelopmentPlanCreate):
@@ -148,7 +189,7 @@ class ProgramDevelopmentPlanOut(ProgramDevelopmentPlanCreate):
 
 
 class ProgramEloFrameworkIn(BaseModel):
-    framework: str | None = None
+    framework: Text64K | None = None
 
 
 class ProgramEloFrameworkOut(ProgramEloFrameworkIn):
@@ -158,9 +199,9 @@ class ProgramEloFrameworkOut(ProgramEloFrameworkIn):
 
 
 class YloCreate(BaseModel):
-    year: int | None = None
-    description: str | None = None
-    branch: str = ""
+    year: Int32 | None = None
+    description: Text64K | None = None
+    branch: Str100 = ""
 
 
 class YloOut(YloCreate):
@@ -170,10 +211,10 @@ class YloOut(YloCreate):
 
 
 class ProgramLearningTopicCreate(BaseModel):
-    topic_no: str
-    title: str | None = None
-    content: str | None = None
-    sort_order: int = 0
+    topic_no: Str20
+    title: Str255 | None = None
+    content: TextMedium | None = None
+    sort_order: Int32 = 0
 
 
 class ProgramLearningTopicOut(ProgramLearningTopicCreate):
@@ -183,8 +224,8 @@ class ProgramLearningTopicOut(ProgramLearningTopicCreate):
 
 
 class ProgramScheduleCreate(BaseModel):
-    semester_type: str
-    schedule_text: str | None = None
+    semester_type: SemesterType
+    schedule_text: Str255 | None = None
 
 
 class ProgramScheduleOut(ProgramScheduleCreate):
@@ -194,10 +235,10 @@ class ProgramScheduleOut(ProgramScheduleCreate):
 
 
 class ProgramBudgetIncomeCreate(BaseModel):
-    detail: str | None = None
-    year_label: str
-    amount: Decimal | None = None
-    sort_order: int = 0
+    detail: Str255 | None = None
+    year_label: Str20
+    amount: Decimal15_2 | None = None
+    sort_order: Int32 = 0
 
 
 class ProgramBudgetIncomeOut(ProgramBudgetIncomeCreate):
@@ -207,10 +248,10 @@ class ProgramBudgetIncomeOut(ProgramBudgetIncomeCreate):
 
 
 class ProgramBudgetExpenseCreate(BaseModel):
-    category: str | None = None
-    year_label: str
-    amount: Decimal | None = None
-    sort_order: int = 0
+    category: Str255 | None = None
+    year_label: Str20
+    amount: Decimal15_2 | None = None
+    sort_order: Int32 = 0
 
 
 class ProgramBudgetExpenseOut(ProgramBudgetExpenseCreate):
@@ -220,10 +261,13 @@ class ProgramBudgetExpenseOut(ProgramBudgetExpenseCreate):
 
 
 class CourseCategoryCreate(BaseModel):
-    name_th: str | None = None
-    required_credits: int | None = None
-    sort_order: int = 0
-    branch: str = ""
+    name_th: Str255 | None = None
+    required_credits: Int32 | None = None
+    credit_type: CreditType = "credit"
+    note: Text64K | None = None
+    sort_order: Int32 = 0
+    branch: Str100 = ""
+    parent_id: int | None = None
 
 
 class CourseCategoryOut(CourseCategoryCreate):
@@ -233,11 +277,11 @@ class CourseCategoryOut(CourseCategoryCreate):
 
 
 class ProgramLearningAttributeCreate(BaseModel):
-    category: str
-    outcomes: str | None = None
-    strategy: str | None = None
-    assessment: str | None = None
-    sort_order: int = 0
+    category: Str50
+    outcomes: Text64K | None = None
+    strategy: Text64K | None = None
+    assessment: Text64K | None = None
+    sort_order: Int32 = 0
 
 
 class ProgramLearningAttributeOut(ProgramLearningAttributeCreate):
@@ -247,11 +291,11 @@ class ProgramLearningAttributeOut(ProgramLearningAttributeCreate):
 
 
 class ProgramLearningDimensionIn(BaseModel):
-    d1: str | None = None
-    d2: str | None = None
-    d3: str | None = None
-    d4: str | None = None
-    d5: str | None = None
+    d1: Text64K | None = None
+    d2: Text64K | None = None
+    d3: Text64K | None = None
+    d4: Text64K | None = None
+    d5: Text64K | None = None
 
 
 class ProgramLearningDimensionOut(ProgramLearningDimensionIn):
@@ -261,12 +305,12 @@ class ProgramLearningDimensionOut(ProgramLearningDimensionIn):
 
 
 class PloCreate(BaseModel):
-    plo_code: str | None = None
-    domain: str | None = None
-    description_th: str | None = None
-    sort_order: int = 0
-    outcome_type: str | None = None
-    branch: str = ""
+    plo_code: Str20 | None = None
+    domain: Str100 | None = None
+    description_th: Text64K | None = None
+    sort_order: Int32 = 0
+    outcome_type: Str20 | None = None
+    branch: Str100 = ""
 
 
 class PloOut(PloCreate):
@@ -277,7 +321,7 @@ class PloOut(PloCreate):
 
 class PloTqfMappingCreate(BaseModel):
     plo_id: int | None = None
-    plo_code: str | None = None
+    plo_code: Str20 | None = None
     d1: bool = False
     d2: bool = False
     d3: bool = False
@@ -292,11 +336,11 @@ class PloTqfMappingOut(PloTqfMappingCreate):
 
 
 class ProgramEvaluationIn(BaseModel):
-    grading_rules: str | None = None
-    achievement_verify: str | None = None
-    graduation_criteria: str | None = None
-    achievement_verify_during: str | None = None
-    achievement_verify_after: str | None = None
+    grading_rules: Text64K | None = None
+    achievement_verify: Text64K | None = None
+    graduation_criteria: Text64K | None = None
+    achievement_verify_during: Text64K | None = None
+    achievement_verify_after: Text64K | None = None
 
 
 class ProgramEvaluationOut(ProgramEvaluationIn):
@@ -305,9 +349,31 @@ class ProgramEvaluationOut(ProgramEvaluationIn):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ProgramLearningProcessIn(BaseModel):
+    # edu_system and schedule are VARCHAR(255) in the database, so the limit is
+    # enforced here and an over-long value is rejected with a 422 instead of
+    # reaching MariaDB and failing as a 500.
+    edu_system: Str255 | None = None
+    summer_edu: Text64K | None = None
+    credit_transfer: Text64K | None = None
+    schedule: Str255 | None = None
+    freshman_issues: Text64K | None = None
+    strategies: Text64K | None = None
+    fieldwork: Text64K | None = None
+    research_req: Text64K | None = None
+    growth_mindset: Text64K | None = None
+    real_world_learning: Text64K | None = None
+
+
+class ProgramLearningProcessOut(ProgramLearningProcessIn):
+    id: int
+    program_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ProgramGraduationCriteriaCreate(BaseModel):
-    criterion: str
-    sort_order: int = 0
+    criterion: Text64K
+    sort_order: Int32 = 0
 
 
 class ProgramGraduationCriteriaOut(ProgramGraduationCriteriaCreate):
@@ -317,9 +383,9 @@ class ProgramGraduationCriteriaOut(ProgramGraduationCriteriaCreate):
 
 
 class ProgramFacultyDevelopmentCreate(BaseModel):
-    section_no: str
-    activity: str | None = None
-    sort_order: int = 0
+    section_no: Str20
+    activity: Text64K | None = None
+    sort_order: Int32 = 0
 
 
 class ProgramFacultyDevelopmentOut(ProgramFacultyDevelopmentCreate):
@@ -329,10 +395,10 @@ class ProgramFacultyDevelopmentOut(ProgramFacultyDevelopmentCreate):
 
 
 class ProgramQualitySectionCreate(BaseModel):
-    section_no: str
-    title: str | None = None
-    content: str | None = None
-    sort_order: int = 0
+    section_no: Str20
+    title: Str255 | None = None
+    content: Text64K | None = None
+    sort_order: Int32 = 0
 
 
 class ProgramQualitySectionOut(ProgramQualitySectionCreate):
@@ -342,8 +408,8 @@ class ProgramQualitySectionOut(ProgramQualitySectionCreate):
 
 
 class QualityKpiCreate(BaseModel):
-    kpi_name: str | None = None
-    description: str | None = None
+    kpi_name: Str255 | None = None
+    description: Text64K | None = None
     y1: bool = False
     y2: bool = False
     y3: bool = False
@@ -358,9 +424,9 @@ class QualityKpiOut(QualityKpiCreate):
 
 
 class ProgramEvaluationProcessCreate(BaseModel):
-    section_no: str
-    content: str | None = None
-    sort_order: int = 0
+    section_no: Str20
+    content: Text64K | None = None
+    sort_order: Int32 = 0
 
 
 class ProgramEvaluationProcessOut(ProgramEvaluationProcessCreate):
@@ -370,16 +436,16 @@ class ProgramEvaluationProcessOut(ProgramEvaluationProcessCreate):
 
 
 class QualityAssuranceIn(BaseModel):
-    std_grad: str | None = None
-    std_student: str | None = None
-    std_faculty: str | None = None
-    teaching_quality: str | None = None
-    learning_support: str | None = None
-    quality_plan: str | None = None
-    risk_mgmt: str | None = None
-    complaints: str | None = None
-    data_review: str | None = None
-    communication: str | None = None
+    std_grad: Text64K | None = None
+    std_student: Text64K | None = None
+    std_faculty: Text64K | None = None
+    teaching_quality: Text64K | None = None
+    learning_support: Text64K | None = None
+    quality_plan: Text64K | None = None
+    risk_mgmt: Text64K | None = None
+    complaints: Text64K | None = None
+    data_review: Text64K | None = None
+    communication: Text64K | None = None
 
 
 class QualityAssuranceOut(QualityAssuranceIn):
@@ -389,9 +455,9 @@ class QualityAssuranceOut(QualityAssuranceIn):
 
 
 class ProgramAdmissionIn(BaseModel):
-    qualifications: str | None = None
-    selection_criteria: str | None = None
-    other_conditions: str | None = None
+    qualifications: Text64K | None = None
+    selection_criteria: Text64K | None = None
+    other_conditions: Text64K | None = None
 
 
 class ProgramAdmissionOut(ProgramAdmissionIn):
@@ -401,10 +467,10 @@ class ProgramAdmissionOut(ProgramAdmissionIn):
 
 
 class ProgramStudentPlanCreate(BaseModel):
-    year_label: str
-    student_count: int | None = None
-    graduate_count: int | None = None
-    sort_order: int = 0
+    year_label: Str20
+    student_count: Int32 | None = None
+    graduate_count: Int32 | None = None
+    sort_order: Int32 = 0
 
 
 class ProgramStudentPlanOut(ProgramStudentPlanCreate):
@@ -414,8 +480,8 @@ class ProgramStudentPlanOut(ProgramStudentPlanCreate):
 
 
 class ProgramSemesterCreate(BaseModel):
-    year: int
-    term: int
+    year: Int32
+    term: Int32
 
 
 class ProgramSemesterOut(ProgramSemesterCreate):
@@ -425,10 +491,29 @@ class ProgramSemesterOut(ProgramSemesterCreate):
 
 
 class CourseCreate(BaseModel):
+    id: Str20
+    name_th: Str255 | None = None
+    name_en: Str255 | None = None
+    credits: Str20 | None = None
+    credit_total: Int32 | None = None
+    credit_lecture: Int32 | None = None
+    credit_lab: Int32 | None = None
+    credit_selfstudy: Int32 | None = None
+    description_th: Text64K | None = None
+    description_en: Text64K | None = None
+    prereq: Text64K | None = None
+    note: Text64K | None = None
+    created_by: int | None = None
+    prerequisites: list[str] = []
+    corequisites: list[str] = []
+
+
+class CourseOut(BaseModel):
     id: str
     name_th: str | None = None
     name_en: str | None = None
     credits: str | None = None
+    credit_total: int | None = None
     credit_lecture: int | None = None
     credit_lab: int | None = None
     credit_selfstudy: int | None = None
@@ -436,18 +521,18 @@ class CourseCreate(BaseModel):
     description_en: str | None = None
     prereq: str | None = None
     note: str | None = None
-
-
-class CourseOut(CourseCreate):
+    created_by: int | None = None
+    prerequisites: list[str] = []
+    corequisites: list[str] = []
     model_config = ConfigDict(from_attributes=True)
 
 
 class ProgramCourseCreate(BaseModel):
     semester_id: int
-    course_id: str
-    sort_order: int = 0
+    course_id: Str20
+    sort_order: Int32 = 0
     category_id: int | None = None
-    branch: str = ""
+    branch: Str100 = ""
 
 
 class ProgramCourseOut(ProgramCourseCreate):
@@ -456,10 +541,10 @@ class ProgramCourseOut(ProgramCourseCreate):
 
 
 class CourseInstructorCreate(BaseModel):
-    course_id: str
+    course_id: Str20
     instructor_id: int | None = None
-    instructor_name: str | None = None
-    sort_order: int = 0
+    instructor_name: Str255 | None = None
+    sort_order: Int32 = 0
 
 
 class CourseInstructorOut(CourseInstructorCreate):
@@ -470,8 +555,8 @@ class CourseInstructorOut(CourseInstructorCreate):
 
 class PloCourseMappingCreate(BaseModel):
     plo_id: int
-    course_id: str
-    mapping_level: str | None = None
+    course_id: Str20
+    mapping_level: Str50 | None = None
 
 
 class PloCourseMappingOut(PloCourseMappingCreate):
@@ -482,13 +567,33 @@ class PloCourseMappingOut(PloCourseMappingCreate):
 
 class ProgramReviewCreate(BaseModel):
     reviewer_id: int
-    decision: str
-    comment: str | None = None
+    decision: ReviewDecision
+    comment: Text64K | None = None
 
 
 class ProgramReviewOut(ProgramReviewCreate):
     id: int
     program_id: int
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CourseCategoryAssignmentCreate(BaseModel):
+    category_id: int
+    course_id: Str20
+    sort_order: Int32 = 0
+
+
+class CourseCategoryAssignmentOut(CourseCategoryAssignmentCreate):
+    id: int
+    program_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProgramFavoriteOut(BaseModel):
+    id: int
+    program_id: int
+    user_id: int
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
@@ -523,6 +628,13 @@ class ProgramOut(ProgramBase):
     course_instructors: list[CourseInstructorOut] = []
     plo_course_mappings: list[PloCourseMappingOut] = []
     reviews: list[ProgramReviewOut] = []
+    category_assignments: list[CourseCategoryAssignmentOut] = []
+
+    # Computed at request time by the router, not stored columns —
+    # avoids stale data. Defaults let ProgramOut still validate from a
+    # bare ORM object; the router overwrites these before returning.
+    progress: int = 0
+    is_starred: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 

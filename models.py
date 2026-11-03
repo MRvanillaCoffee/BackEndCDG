@@ -84,6 +84,15 @@ class Program(Base):
         server_default="draft"
     )
 
+    # Whether this is a brand-new curriculum or a revision of an existing
+    # one — distinct from `status`, which tracks approval workflow stage.
+    curriculum_type: Mapped[str] = mapped_column(
+        Enum("new", "revision"),
+        nullable=False,
+        default="new",
+        server_default="new"
+    )
+
     # ==========================================
     # Narrative sections (used by later pages of the wizard)
     # ==========================================
@@ -238,6 +247,12 @@ class Program(Base):
         uselist=False
     )
 
+    learning_process: Mapped["ProgramLearningProcess | None"] = relationship(
+        back_populates="program",
+        cascade="all, delete-orphan",
+        uselist=False
+    )
+
     graduation_criteria: Mapped[list["ProgramGraduationCriteria"]] = relationship(
         back_populates="program",
         cascade="all, delete-orphan"
@@ -296,6 +311,16 @@ class Program(Base):
     )
 
     reviews: Mapped[list["ProgramReview"]] = relationship(
+        back_populates="program",
+        cascade="all, delete-orphan"
+    )
+
+    category_assignments: Mapped[list["CourseCategoryAssignment"]] = relationship(
+        back_populates="program",
+        cascade="all, delete-orphan"
+    )
+
+    favorites: Mapped[list["ProgramFavorite"]] = relationship(
         back_populates="program",
         cascade="all, delete-orphan"
     )
@@ -530,13 +555,32 @@ class CourseCategory(Base):
     program_id: Mapped[int] = mapped_column(
         ForeignKey("program.id", ondelete="CASCADE"), nullable=False
     )
+    # Self-referencing FK so categories can nest (e.g. 1) -> 1.1 -> 1.1a).
+    # NULL means a top-level category. The API returns these as a flat list
+    # with parent_id set; the frontend reconstructs the tree from that.
+    parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("course_category.id", ondelete="CASCADE"), nullable=True
+    )
 
     name_th: Mapped[str | None] = mapped_column(String(255), nullable=True)
     required_credits: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    credit_type: Mapped[str] = mapped_column(
+        Enum("credit", "hour"), nullable=False, default="credit"
+    )
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(default=0)
     branch: Mapped[str] = mapped_column(String(100), nullable=False, default="")
 
     program: Mapped["Program"] = relationship(back_populates="course_categories")
+    children: Mapped[list["CourseCategory"]] = relationship(
+        back_populates="parent", cascade="all, delete-orphan"
+    )
+    parent: Mapped["CourseCategory | None"] = relationship(
+        back_populates="children", remote_side=[id]
+    )
+    course_assignments: Mapped[list["CourseCategoryAssignment"]] = relationship(
+        back_populates="category", cascade="all, delete-orphan"
+    )
 
 
 # ============================================================
@@ -644,6 +688,35 @@ class ProgramEvaluation(Base):
     achievement_verify_after: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     program: Mapped["Program"] = relationship(back_populates="evaluation")
+
+
+# ============================================================
+# PROGRAM LEARNING PROCESS  (matches SQL: program_learning_process)
+# Singleton — one row per program (UNIQUE on program_id in the database).
+# No page uses this table yet: page 3's matching sections are currently
+# stored in program_learning_topic instead.
+# edu_system and schedule are VARCHAR(255); the rest are TEXT.
+# ============================================================
+class ProgramLearningProcess(Base):
+    __tablename__ = "program_learning_process"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    program_id: Mapped[int] = mapped_column(
+        ForeignKey("program.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
+
+    edu_system: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    summer_edu: Mapped[str | None] = mapped_column(Text, nullable=True)
+    credit_transfer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    schedule: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    freshman_issues: Mapped[str | None] = mapped_column(Text, nullable=True)
+    strategies: Mapped[str | None] = mapped_column(Text, nullable=True)
+    fieldwork: Mapped[str | None] = mapped_column(Text, nullable=True)
+    research_req: Mapped[str | None] = mapped_column(Text, nullable=True)
+    growth_mindset: Mapped[str | None] = mapped_column(Text, nullable=True)
+    real_world_learning: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    program: Mapped["Program"] = relationship(back_populates="learning_process")
 
 
 # ============================================================
@@ -825,7 +898,11 @@ class ProgramSemester(Base):
     term: Mapped[int] = mapped_column(Integer, nullable=False)
 
     program: Mapped["Program"] = relationship(back_populates="semesters")
-    program_courses: Mapped[list["ProgramCourse"]] = relationship(back_populates="semester")
+    # Deleting a semester (or its program) must delete its study-plan rows. Without a cascade the ORM
+    # tries to set program_course.semester_id to NULL instead, which the NOT NULL column refuses.
+    program_courses: Mapped[list["ProgramCourse"]] = relationship(
+        back_populates="semester", cascade="all, delete-orphan"
+    )
 
 
 # ============================================================
@@ -842,6 +919,7 @@ class Course(Base):
     name_th: Mapped[str | None] = mapped_column(String(255), nullable=True)
     name_en: Mapped[str | None] = mapped_column(String(255), nullable=True)
     credits: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    credit_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
     credit_lecture: Mapped[int | None] = mapped_column(Integer, nullable=True)
     credit_lab: Mapped[int | None] = mapped_column(Integer, nullable=True)
     credit_selfstudy: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -849,6 +927,44 @@ class Course(Base):
     description_en: Mapped[str | None] = mapped_column(Text, nullable=True)
     prereq: Mapped[str | None] = mapped_column(Text, nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    prerequisites: Mapped[list["CoursePrerequisite"]] = relationship(
+        foreign_keys="CoursePrerequisite.course_id",
+        back_populates="course",
+        cascade="all, delete-orphan"
+    )
+    corequisites: Mapped[list["CourseCorequisite"]] = relationship(
+        foreign_keys="CourseCorequisite.course_id",
+        back_populates="course",
+        cascade="all, delete-orphan"
+    )
+
+
+# ============================================================
+# COURSE PREREQUISITE  (new — many-to-many, course -> its prerequisites)
+# ============================================================
+class CoursePrerequisite(Base):
+    __tablename__ = "course_prerequisite"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    course_id: Mapped[str] = mapped_column(ForeignKey("course.id", ondelete="CASCADE"), nullable=False)
+    prerequisite_course_id: Mapped[str] = mapped_column(ForeignKey("course.id"), nullable=False)
+
+    course: Mapped["Course"] = relationship(foreign_keys=[course_id], back_populates="prerequisites")
+
+
+# ============================================================
+# COURSE COREQUISITE  (new — many-to-many, course -> its corequisites)
+# ============================================================
+class CourseCorequisite(Base):
+    __tablename__ = "course_corequisite"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    course_id: Mapped[str] = mapped_column(ForeignKey("course.id", ondelete="CASCADE"), nullable=False)
+    corequisite_course_id: Mapped[str] = mapped_column(ForeignKey("course.id"), nullable=False)
+
+    course: Mapped["Course"] = relationship(foreign_keys=[course_id], back_populates="corequisites")
 
 
 # ============================================================
@@ -952,3 +1068,52 @@ class ProgramReview(Base):
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=func.now(), nullable=False)
 
     program: Mapped["Program"] = relationship(back_populates="reviews")
+
+
+# ============================================================
+# COURSE CATEGORY ASSIGNMENT  (new)
+# Links a course into a category tree node with NO semester involved —
+# for the drag-and-drop structure builder, which is independent of the
+# semester-based study plans that ProgramCourse serves elsewhere.
+# ============================================================
+class CourseCategoryAssignment(Base):
+    __tablename__ = "course_category_assignment"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    program_id: Mapped[int] = mapped_column(
+        ForeignKey("program.id", ondelete="CASCADE"), nullable=False
+    )
+    category_id: Mapped[int] = mapped_column(
+        ForeignKey("course_category.id", ondelete="CASCADE"), nullable=False
+    )
+    course_id: Mapped[str] = mapped_column(ForeignKey("course.id"), nullable=False)
+    sort_order: Mapped[int] = mapped_column(default=0)
+
+    program: Mapped["Program"] = relationship(back_populates="category_assignments")
+    category: Mapped["CourseCategory"] = relationship(back_populates="course_assignments")
+
+
+# ============================================================
+# PROGRAM FAVORITE  (new)
+# Per-user star/bookmark on a program, for the dashboard's starred list.
+# ============================================================
+class ProgramFavorite(Base):
+    __tablename__ = "program_favorite"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    program_id: Mapped[int] = mapped_column(
+        ForeignKey("program.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=func.now(), nullable=False)
+
+    program: Mapped["Program"] = relationship(back_populates="favorites")
+
+
+
+
+
+
+
+
+
