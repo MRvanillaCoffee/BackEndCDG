@@ -6,11 +6,6 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import DataError, IntegrityError
 from routes import programs
 from fastapi.middleware.cors import CORSMiddleware
-
-# 🌟 1. นำเข้า Database Engine และ Models ของเรา
-from database import engine
-import models
-
 from routes import (
     programs,
     program_majors,
