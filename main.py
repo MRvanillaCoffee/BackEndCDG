@@ -35,7 +35,8 @@ from routes import (
     course_instructor,
     plo_course_mapping,
     course_category_assignment,
-    program_favorites
+    program_favorites,
+    ai
 )
 
 
@@ -130,6 +131,7 @@ app.include_router(course_instructor.router)
 app.include_router(plo_course_mapping.router)
 app.include_router(course_category_assignment.router)
 app.include_router(program_favorites.router)
+app.include_router(ai.router)
 
 @app.get("/health")
 def health_check():

@@ -30,7 +30,6 @@ services:
     restart: unless-stopped
     ports:
       - "8081:80"
-      - "8081:80"
     environment:
       PMA_HOST: mariadb
       PMA_PORT: 3306
@@ -48,7 +47,7 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     environment:
-      - OLLAMA_NUM_PARALLEL=4
+      - OLLAMA_NUM_PARALLEL=1
       - OLLAMA_MAX_LOADED_MODELS=1
       - OLLAMA_KEEP_ALIVE=24h
     healthcheck:
@@ -87,7 +86,6 @@ services:
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
       - GEMMA_MODEL=${GEMMA_MODEL:-gemma3:4b}
-      - DATABASE_URL=${DATABASE_URL}
       - DATABASE_URL=${DATABASE_URL}
     depends_on:
       ollama:
