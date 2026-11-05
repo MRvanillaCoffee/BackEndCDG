@@ -1,10 +1,12 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session, selectinload
 
 from database import get_db
 from models import Program, ProgramFavorite, User
 from schemas import ProgramCreate, ProgramUpdate, ProgramOut
+from services.obe_docx_services import generate_component1_docx, convert_docx_to_pdf
 
 
 router = APIRouter(
@@ -232,3 +234,35 @@ def delete_program(
         "message": "Program deleted successfully",
         "program_id": program_id
     }
+
+# Download Component 1 as PDF
+@router.get("/{program_id}/export/component1/pdf")
+def export_c1_pdf(program_id: int, db: Session = Depends(get_db)):
+    docx_path = generate_component1_docx(program_id, db)
+    if not docx_path:
+        raise HTTPException(status_code=404, detail="Program not found")
+    
+    # Convert .docx to .pdf using LibreOffice
+    pdf_path = convert_docx_to_pdf(docx_path)
+    
+    filename = f"OBE2_Component1_{program_id}.pdf"
+    return FileResponse(
+        pdf_path,
+        media_type="application/pdf",
+        filename=filename,
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+# Download Component 1 as Editable Word (.docx)
+@router.get("/{program_id}/export/component1/docx")
+def export_c1_docx(program_id: int, db: Session = Depends(get_db)):
+    docx_path = generate_component1_docx(program_id, db)
+    if not docx_path:
+        raise HTTPException(status_code=404, detail="Program not found")
+        
+    filename = f"OBE2_Component1_{program_id}.docx"
+    return FileResponse(
+        docx_path,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        filename=filename,
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )

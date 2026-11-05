@@ -9,3 +9,5 @@ python-jose[cryptography]
 python-multipart
 bcrypt==4.0.1
 httpx
+docxtpl>=0.16.8
+python-docx>=1.1.0
