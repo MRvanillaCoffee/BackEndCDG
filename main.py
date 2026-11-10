@@ -4,7 +4,6 @@ import re
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import DataError, IntegrityError
-from routes import programs
 from fastapi.middleware.cors import CORSMiddleware
 from routes import (
     programs,
